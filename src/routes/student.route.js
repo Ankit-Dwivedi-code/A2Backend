@@ -1,6 +1,6 @@
 import { Router } from "express"
 import { registerStudent } from "../controllers/student.controller.js"
-// import { upload } from "../middleware/multer.middleware.js" 
+import { upload } from "../middlewares/multer.middleware.js" 
 
 
 const router = Router()
@@ -8,7 +8,12 @@ const router = Router()
 
 
 router.route("/register").post(
-   
+    upload.fields([
+        {
+            name : "avatar",
+            maxCount:1,
+        }
+    ]),
     registerStudent
 )
 
