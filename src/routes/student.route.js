@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { registerStudent } from "../controllers/student.controller.js"
+import { registerStudent, verifyOtp } from "../controllers/student.controller.js"
 import { upload } from "../middlewares/multer.middleware.js" 
 
 
@@ -16,5 +16,7 @@ router.route("/register").post(
     ]),
     registerStudent
 )
+
+router.post('/verify-otp', verifyOtp);
 
 export default router

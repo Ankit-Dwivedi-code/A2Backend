@@ -3,6 +3,8 @@ import {Student} from "../models/student.model.js"
 import { ApiError } from '../utils/apiError.js';
 import { uploadOnCloudinary } from '../utils/cloudinary.js';
 import { ApiResponse } from '../utils/apiResponse.js';
+import { generateOtp } from '../utils/otpGenerator.js';
+import { sendEmail } from '../utils/sendEmail.js';
 
 
 const generateAccessAndRefreshTokens = async(studentId) =>{
@@ -52,27 +54,58 @@ const registerStudent = asyncHandler(async(req, res) =>{
         throw new ApiError(400, 'Failed to upload avatar image');
     }
 
+    // Generate OTP and set expiration
+    const { otp, otpExpires } = generateOtp();
+
     const student = new Student({
         username,
         email,
         password,
-        avatar: avatar.url
+        avatar: avatar.url,
+        otp,
+        otpExpires
     })
 
     // Save the new student to the database
     await student.save();
 
-    // Remove sensitive data before sending the response
-    const createdStudent = await Student.findById(student._id).select('-password -refreshToken');
-
-    if (!createdStudent) {
-        throw new ApiError(500, 'Something went wrong in creating the student');
-    }
-
-    // Send success response
     return res.status(201).json(
-        new ApiResponse(201, createdStudent, 'Student registered successfully')
+        new ApiResponse(201, { email }, 'OTP sent to your email')
     );
 })
 
-export {registerStudent}
+/**
+ * Verifies a student's OTP and completes the registration process.
+ */
+export const verifyOtp = asyncHandler(async (req, res) => {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+        throw new ApiError(400, 'Email and OTP are required');
+    }
+
+    const student = await Student.findOne({ email });
+
+    if (!student || student.isVerified) {
+        throw new ApiError(400, 'Invalid or already verified student');
+    }
+
+    if (student.otp !== otp || student.otpExpires < Date.now()) {
+        throw new ApiError(400, 'Invalid or expired OTP');
+    }
+
+    // Mark student as verified and clear OTP fields
+    student.isVerified = true;
+    student.otp = undefined;
+    student.otpExpires = undefined;
+    await student.save();
+
+    // Remove sensitive data before sending the response
+    const verifiedStudent = await Student.findById(student._id).select('-password -refreshToken');
+
+    return res.status(200).json(
+        new ApiResponse(200, verifiedStudent, 'Student verified and registered successfully')
+    );
+});
+
+export {registerStudent, verifyOtp}

@@ -29,7 +29,7 @@ const videoSchema = new mongoose.Schema({
     },
     owner:{
         type:mongoose.Schema.Types.ObjectId,
-        ref: "Teacher"
+        ref: "Trainer"
     }
 }, {timestamps:true})
 
