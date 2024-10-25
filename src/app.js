@@ -22,4 +22,14 @@ app.use(express.static("public"));
 // Middleware to parse cookies from the request
 app.use(cookieParser());
 
+
+
+//routes
+import studentRouter from "./routes/student.route.js";
+
+
+
+//routes declaration
+app.use("/api/a2/students", studentRouter)
+
 export { app }; // Exporting the app instance for use in other modules
