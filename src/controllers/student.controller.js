@@ -4,7 +4,7 @@ import { ApiError } from '../utils/apiError.js';
 import { uploadOnCloudinary } from '../utils/cloudinary.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 import { generateOtp } from '../utils/otpGenerator.js';
-import { sendEmail } from '../utils/sendEmail.js';
+import { sendMail } from '../utils/sendEmail.js';
 
 
 const generateAccessAndRefreshTokens = async(studentId) =>{
@@ -57,6 +57,14 @@ const registerStudent = asyncHandler(async(req, res) =>{
     // Generate OTP and set expiration
     const { otp, otpExpires } = generateOtp();
 
+    if (!otp || !otpExpires) {
+        throw new ApiError(500, "Internal server error")
+    }
+
+
+    // Send OTP email
+    await sendMail(email, otp);
+
     const student = new Student({
         username,
         email,
@@ -77,7 +85,7 @@ const registerStudent = asyncHandler(async(req, res) =>{
 /**
  * Verifies a student's OTP and completes the registration process.
  */
-export const verifyOtp = asyncHandler(async (req, res) => {
+const verifyOtp = asyncHandler(async (req, res) => {
     const { email, otp } = req.body;
 
     if (!email || !otp) {
