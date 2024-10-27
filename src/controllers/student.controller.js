@@ -57,6 +57,7 @@ const registerStudent = asyncHandler(async (req, res) => {
     email,
     password,
     avatar: avatar.url,
+    avatarPublicId: avatar.public_id,
     otp,
     otpExpires
   });
@@ -231,4 +232,157 @@ const renewRefreshToken = asyncHandler(async(req, res)=>{
   }
 })
 
-export { registerStudent, verifyOtp, loginStudent, verifyLoginOtp, logoutStudent, renewRefreshToken };
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new ApiError(400, "Please enter the email");
+  }
+
+  const student = await Student.findOne({ email });
+  if (!student) {
+    throw new ApiError(400, "Invalid Email ID");
+  }
+
+  const { otp, otpExpires } = generateOtp();
+  if (!otp || !otpExpires) {
+    throw new ApiError(500, "Internal server error");
+  }
+
+  await sendMail(email, otp);
+
+  student.otp = otp;
+  student.otpExpires = otpExpires;
+  await student.save({ validateBeforeSave: false });
+
+  return res.status(200).json(
+    new ApiResponse(200, { email }, 'OTP sent to your email for password reset')
+  );
+});
+
+
+const verifyForgotPasswordOtp = asyncHandler(async (req, res) => {
+  const { email, otp } = req.body;
+
+  if (!email || !otp) {
+    throw new ApiError(400, 'Email and OTP are required');
+  }
+
+  const student = await Student.findOne({ email });
+
+  if (!student) {
+    throw new ApiError(400, 'Invalid student');
+  }
+
+  if (student.otp !== otp || student.otpExpires < Date.now()) {
+    throw new ApiError(400, 'Invalid or expired OTP');
+  }
+
+  student.isVerified = true; // Temporarily marking as verified for password reset
+  student.otp = undefined;
+  student.otpExpires = undefined;
+  await student.save();
+
+  return res.status(200).json(
+    new ApiResponse(200, { email }, 'OTP verified successfully, you can now reset your password')
+  );
+});
+
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const { email, newPassword } = req.body;
+
+  if (!email || !newPassword) {
+    throw new ApiError(400, 'Email and new password are required');
+  }
+
+  const student = await Student.findOne({ email });
+
+  if (!student || !student.isVerified) {
+    throw new ApiError(400, 'Invalid request or OTP not verified');
+  }
+
+  student.password = newPassword;
+  student.isVerified = false; // Reset isVerified after password reset
+  await student.save();
+
+  return res.status(200).json(
+    new ApiResponse(200, {}, 'Password reset successfully')
+  );
+});
+
+
+const changeCurrentPassword = asyncHandler(async(req, res)=>{
+
+  const {oldPassword, newPassword} = req.body
+  
+  if(!oldPassword || !newPassword){
+      throw new ApiError(400, "Please provide old and new password")
+  }
+
+  // Find the student by ID
+  const student = await Student.findById(req.student._id);
+  if (!student) {
+    throw new ApiError(400, "Student not found, please provide password correctly");
+  }
+
+   // Check if the old password is correct
+   const isPasswordCorrect = await student.isPasswordCorrect(oldPassword);
+   if (!isPasswordCorrect) {
+     throw new ApiError(401, "Invalid old password");
+   }
+
+   student.password = newPassword
+  await student.save({validateBeforeSave : false })
+
+  return res
+  .status(200)
+  .json(new ApiResponse(200, {}, "Password changed successfully"))
+})
+
+//to get the current student
+const getCurrentStudent = asyncHandler(async(req, res)=>{
+  // console.log(req.student);
+  return res
+  .status(200)
+  .json(
+      new ApiResponse(200, req.student, "Current student fetched successfully")
+  )
+})
+
+const updateStudentAvatar = asyncHandler(async (req, res) => {
+  const avatarLocalPath = req.file.path;
+
+  if (!avatarLocalPath) {
+      throw new ApiError(400, "Please provide the avatar");
+  }
+
+  const student = await Student.findById(req.student._id);
+
+  if (!student) {
+      throw new ApiError(400, "Student not found");
+  }
+
+  // Delete old avatar from Cloudinary if it exists
+  if (student.avatarPublicId) {
+      await cloudinary.uploader.destroy(student.avatarPublicId);
+  }
+
+  // Upload new avatar to Cloudinary
+  const avatar = await uploadOnCloudinary(avatarLocalPath);
+
+  if (!avatar?.url || !avatar?.public_id) {
+      throw new ApiError(400, "Error while uploading avatar");
+  }
+
+  // Update student with new avatar URL and public ID
+  student.avatar = avatar.url;
+  student.avatarPublicId = avatar.public_id;
+  await student.save();
+
+  return res
+      .status(200)
+      .json(new ApiResponse(200, student, "Avatar uploaded successfully"));
+});
+
+export { registerStudent, verifyOtp, loginStudent, verifyLoginOtp, logoutStudent, renewRefreshToken, resetPassword, verifyForgotPasswordOtp, forgotPassword, getCurrentStudent, changeCurrentPassword, updateStudentAvatar };
