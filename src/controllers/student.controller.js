@@ -5,6 +5,7 @@ import { uploadOnCloudinary } from '../utils/cloudinary.js';
 import { ApiResponse } from '../utils/apiResponse.js';
 import { generateOtp } from '../utils/otpGenerator.js';
 import { sendMail } from '../utils/sendEmail.js';
+import jwt from "jsonwebtoken"
 
 const generateAccessAndRefreshTokens = async (studentId) => {
   try {
@@ -184,4 +185,50 @@ const logoutStudent = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, {}, "Student logged out successfully"));
 });
 
-export { registerStudent, verifyOtp, loginStudent, verifyLoginOtp, logoutStudent };
+const renewRefreshToken = asyncHandler(async(req, res)=>{
+  const token = req.cookies?.refreshToken || req.body.refreshToken
+
+  try {
+      const decodedToken = jwt.verify(token, process.env.REFRESH_TOKEN_SECRET)
+  
+      if(!decodedToken){
+          throw new ApiError(401, "Unauthorized request")
+      }
+  
+      const student = await Student.findById(decodedToken._id)
+  
+      if(!student){
+          throw new ApiError(401, "Inavild refresh Token")
+      }
+  
+  
+      if(token !== student.refreshToken){
+          throw new ApiError(401, "Token doesnot match")
+      }
+  
+      const {refreshToken, accessToken} = generateAccessAndRefreshTokens(student._id)
+  
+      const options = {
+          httpOnly : true,
+          secure : true
+      }
+  
+      return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .json(
+          new ApiResponse(200, 
+              {
+                  accessToken,
+                  refreshToken
+              },
+              "Refresh token updated"
+          )
+      )
+  } catch (error) {
+      throw new ApiError(400, error?.message || "Invalid access token")
+  }
+})
+
+export { registerStudent, verifyOtp, loginStudent, verifyLoginOtp, logoutStudent, renewRefreshToken };

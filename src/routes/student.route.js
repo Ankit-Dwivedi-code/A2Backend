@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { loginStudent, logoutStudent, registerStudent, verifyLoginOtp, verifyOtp } from "../controllers/student.controller.js"
+import { loginStudent, logoutStudent, registerStudent, renewRefreshToken, verifyLoginOtp, verifyOtp } from "../controllers/student.controller.js"
 import { upload } from "../middlewares/multer.middleware.js" 
 import { VerifyStudent } from "../middlewares/auth.middleware.js"
 
@@ -26,5 +26,6 @@ router.route('/verify-login').post(verifyLoginOtp)
 
 //Secured routes
 router.route('/logout').post(VerifyStudent, logoutStudent)
+router.route('/refresh-token').post( renewRefreshToken)
 
 export default router
